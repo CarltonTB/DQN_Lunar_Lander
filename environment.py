@@ -13,23 +13,26 @@ def run_lunar_lander(agent):
     # Make lunar lander v2 environment
     env = gym.make('LunarLander-v2')
     env.reset()
-    # print(env.action_space)
-    # print(env.observation_space)
-    for episode in range(100):
-        state = np.zeros(8, dtype=np.float32)
-        for t in range(1000):
+    for episode in range(200):
+        state = None
+        for t in range(10000):
             if t > 0:
                 state = observation
-            env.render()
+            if episode > 150:
+                env.render()
             # take a random action
             action = agent.select_action(state)
+            print(action)
             observation, reward, done, info = env.step(action)
             next_state = observation
-            agent.push_memory(TransitionMemory(state, action, reward, next_state, done))
+            agent.push_memory(TransitionMemory(state, action, reward, next_state, done)) if state is not None else print("No state")
+            # train the network:
+            if t > 50:
+                agent.do_training_update(batch_size=50)
             if done:
                 # print(f'Episode {episode} ended in {t + 1} timesteps')
                 break
-
+        agent.decay_epsilon(decay_rate=0.99)
         env.reset()
     env.close()
     print(f'Time elapsed: {time.time() - start} seconds')
@@ -37,5 +40,5 @@ def run_lunar_lander(agent):
 
 
 if __name__ == "__main__":
-    agent = DQNLunarLanderAgent(epsilon=0.1, learning_rate=0.001, gamma=0.99, q_network=DQN(), max_memory_length=100000)
-    run_lunar_lander(agent)
+    ll_agent = DQNLunarLanderAgent(epsilon=1.0, learning_rate=0.00001, gamma=0.99, q_network=DQN(), max_memory_length=100000)
+    run_lunar_lander(ll_agent)
