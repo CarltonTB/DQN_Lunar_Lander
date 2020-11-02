@@ -6,23 +6,52 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+import os
 
 
 class DQNLunarLanderAgent:
-    def __init__(self, epsilon, learning_rate, gamma, q_network, max_memory_length):
+    def __init__(self, epsilon, learning_rate, tau, gamma, q_network, target_network, max_memory_length):
         self.experience_memory = deque(maxlen=max_memory_length)
         self.q_network = q_network
+        self.target_network = target_network
         # epsilon is the probability of taking a random action
         self.epsilon = epsilon
         self.learning_rate = learning_rate
         # gamma is the discount factor
         self.gamma = gamma
+        self.tau = tau
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
         self.loss_history = []
+        self.total_actions = 0
+        self.action_counts = {'0': 0,
+                              '1': 0,
+                              '2': 0,
+                              '3': 0}
+        self.action_distribution = {'0': 0.0,
+                                    '1': 0.0,
+                                    '2': 0.0,
+                                    '3': 0.0}
 
     def decay_epsilon(self, decay_rate):
         self.epsilon = self.epsilon*decay_rate
+        # enforce a minimum epsilon
+        if self.epsilon < 0.01:
+            self.epsilon = 0.01
+
+    def update_action_distribution(self):
+        for key in self.action_distribution.keys():
+            self.action_distribution[key] = self.action_counts[key]/self.total_actions
+
+    def save_model(self):
+        print("Saving Q network...")
+        if not os.path.isdir('checkpoint'):
+            os.mkdir('checkpoint')
+        network_state = {
+            'net': self.q_network.state_dict(),
+        }
+        torch.save(network_state, './checkpoint/ckpt.pth')
+        print("Save complete!")
 
     def select_action(self, state):
         """
@@ -31,14 +60,18 @@ class DQNLunarLanderAgent:
         otherwise take the action with the highest value given the current state (according to the Q-network)
         :return: Discrete action, int in range 0-4 inclusive
         """
-        if state is None:
-            return 0
-        elif random.random() <= self.epsilon:
-            return random.randint(0, 3)
+        if random.random() <= self.epsilon:
+            action = random.randint(0, 3)
         else:
             # Feed forward the q network and take the action with highest q value
-            qs = self.q_network(torch.tensor(state, dtype=torch.float32))
-            return np.argmax(qs.detach().numpy())
+            self.q_network.eval()
+            with torch.no_grad():
+                qs = self.q_network(torch.tensor(state, dtype=torch.float32))
+                action = np.argmax(qs.detach().numpy())
+        self.q_network.train()
+        self.total_actions += 1
+        self.action_counts[str(action)] = self.action_counts[str(action)] + 1
+        return action
 
     def sample_random_experience(self, n):
         """
@@ -67,20 +100,27 @@ class DQNLunarLanderAgent:
         self.experience_memory.append(memory)
 
     def do_training_update(self, batch_size):
-        if batch_size == 0:
+        if batch_size == 0 or len(self.experience_memory) < batch_size:
             return
         self.optimizer.zero_grad()
+        # Sample experience
         states, actions, rewards, next_states, dones = self.sample_random_experience(n=batch_size)
+        # Get q values for the current state
         current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-        next_q = self.q_network(next_states)
-        max_q = torch.max(next_q).item()
-        expected_q = rewards + (1 - dones) * self.gamma * max_q
-        expected_q = expected_q.detach()
-        assert (current_q.size() == expected_q.size())
-        loss = self.criterion(current_q, expected_q)
+        next_q = self.target_network(next_states).detach()
+        max_next_q = torch.max(next_q).item()
+        target_q = rewards + (1 - dones) * self.gamma * max_next_q
+        target_q = target_q.detach()
+        assert (current_q.size() == target_q.size())
+        loss = self.criterion(current_q, target_q)
         self.loss_history.append(loss.item())
         loss.backward()
         self.optimizer.step()
+
+    def update_target_network(self):
+        # Update the target network
+        for source_parameters, target_parameters in zip(self.q_network.parameters(), self.target_network.parameters()):
+            target_parameters.data.copy_(self.tau * source_parameters.data + (1.0 - self.tau) * target_parameters.data)
 
 
 class TransitionMemory:
@@ -95,14 +135,12 @@ class TransitionMemory:
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(8, 128)
-        self.fc2 = nn.Linear(128, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 4)
+        self.fc1 = nn.Linear(8, 32)
+        self.fc2 = nn.Linear(32, 64)
+        self.fc3 = nn.Linear(64, 4)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.fc3(x)
         return x
