@@ -10,15 +10,21 @@ import os
 
 
 class DQNLunarLanderAgent:
-    def __init__(self, epsilon, learning_rate, tau, gamma, q_network, target_network, max_memory_length):
+    def __init__(self, epsilon, min_epsilon, decay_rate, learning_rate, tau, gamma, q_network, target_network, max_memory_length):
         self.experience_memory = deque(maxlen=max_memory_length)
         self.q_network = q_network
         self.target_network = target_network
         # epsilon is the probability of taking a random action
         self.epsilon = epsilon
+        # lowest epsilon is allowed to go during training
+        self.min_epsilon = min_epsilon
+        # rate at which epsilon decays each episode
+        self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         # gamma is the discount factor
         self.gamma = gamma
+        # tau is the weighting of the target network parameters when updating them with the
+        # regular q network parameters
         self.tau = tau
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
@@ -33,11 +39,9 @@ class DQNLunarLanderAgent:
                                     '2': 0.0,
                                     '3': 0.0}
 
-    def decay_epsilon(self, decay_rate):
-        self.epsilon = self.epsilon*decay_rate
-        # enforce a minimum epsilon
-        if self.epsilon < 0.01:
-            self.epsilon = 0.01
+    def decay_epsilon(self):
+        # enforce a minimum epsilon during training
+        self.epsilon = max(self.epsilon*self.decay_rate, self.min_epsilon)
 
     def update_action_distribution(self):
         for key in self.action_distribution.keys():
@@ -135,9 +139,9 @@ class TransitionMemory:
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(8, 32)
-        self.fc2 = nn.Linear(32, 64)
-        self.fc3 = nn.Linear(64, 4)
+        self.fc1 = nn.Linear(8, 64)
+        self.fc2 = nn.Linear(64, 128)
+        self.fc3 = nn.Linear(128, 4)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
