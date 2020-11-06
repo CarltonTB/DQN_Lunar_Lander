@@ -15,6 +15,7 @@ def train_lunar_lander(agent, episodes):
     env.reset()
     env.seed(0)
     score_history = []
+    last_hundred = deque(maxlen=100)
     for episode in range(episodes):
         score = 0
         state = env.reset()
@@ -25,24 +26,32 @@ def train_lunar_lander(agent, episodes):
             next_state, reward, done, info = env.step(action)
             agent.push_memory(TransitionMemory(state, action, reward, next_state, done))
             # train the network:
-            agent.do_training_update(batch_size=64)
+            agent.do_training_update()
             score += reward
             state = next_state
-            agent.decay_epsilon()
-            if t % 4 == 0:
-                # Update the target network params every 10 time steps
-                agent.update_target_network()
+            # if t % 2 == 0:
+            #     agent.update_target_network()
             if done:
                 # print(f'Episode {episode} ended in {t + 1} timesteps')
                 break
-        # print(f'epsilon: {agent.epsilon}')
+        # try updating the target network after each episode
+        agent.update_target_network()
+        agent.decay_epsilon()
         env.reset()
         score_history.append(score)
+        last_hundred.append(score)
+        score_sum = 0
+        for score in last_hundred:
+            score_sum += score
+        mean_last_hundred = score_sum/100
         if episode % 100 == 0:
             agent.update_action_distribution()
             print(f'Episode {episode} complete!')
             print("Action Distribution:")
             print(agent.action_distribution)
+            print(f'epsilon: {agent.epsilon}')
+            print(f"avg. score last 100: {mean_last_hundred}")
+            print("\n")
     env.close()
     print(f'Time elapsed: {time.time() - start} seconds')
     agent.save_model()
@@ -94,7 +103,8 @@ def plot_score(score):
 
 
 if __name__ == "__main__":
-    ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.01, decay_rate=0.999, learning_rate=0.001, gamma=0.99,
-                                   tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=100000)
-    # train_lunar_lander(ll_agent, episodes=500)
+    ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
+                                   learning_rate=0.0001, gamma=0.99, batch_size=64,
+                                   tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=1000000)
+    # train_lunar_lander(ll_agent, episodes=1000)
     test_lunar_lander(ll_agent, 100, load_from_checkpoint=True)

@@ -10,7 +10,8 @@ import os
 
 
 class DQNLunarLanderAgent:
-    def __init__(self, epsilon, min_epsilon, decay_rate, learning_rate, tau, gamma, q_network, target_network, max_memory_length):
+    def __init__(self, epsilon, min_epsilon, decay_rate, learning_rate, tau, gamma, batch_size,
+                 q_network, target_network, max_memory_length):
         self.experience_memory = deque(maxlen=max_memory_length)
         self.q_network = q_network
         self.target_network = target_network
@@ -26,6 +27,7 @@ class DQNLunarLanderAgent:
         # tau is the weighting of the target network parameters when updating them with the
         # regular q network parameters
         self.tau = tau
+        self.batch_size = batch_size
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
         self.loss_history = []
@@ -103,12 +105,12 @@ class DQNLunarLanderAgent:
         assert (isinstance(memory, TransitionMemory))
         self.experience_memory.append(memory)
 
-    def do_training_update(self, batch_size):
-        if batch_size == 0 or len(self.experience_memory) < batch_size:
+    def do_training_update(self):
+        if self.batch_size == 0 or len(self.experience_memory) < self.batch_size:
             return
         self.optimizer.zero_grad()
         # Sample experience
-        states, actions, rewards, next_states, dones = self.sample_random_experience(n=batch_size)
+        states, actions, rewards, next_states, dones = self.sample_random_experience(n=self.batch_size)
         # Get q values for the current state
         current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         next_q = self.target_network(next_states).detach()
@@ -139,8 +141,8 @@ class TransitionMemory:
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(8, 64)
-        self.fc2 = nn.Linear(64, 128)
+        self.fc1 = nn.Linear(8, 128)
+        self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, 4)
 
     def forward(self, x):
