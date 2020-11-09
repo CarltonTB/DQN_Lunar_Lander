@@ -29,7 +29,9 @@ class DQNLunarLanderAgent:
         self.tau = tau
         self.batch_size = batch_size
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
-        self.criterion = nn.MSELoss()
+        # self.criterion = nn.MSELoss()
+        # Huber loss reduces sensitivity to outliers
+        self.criterion = nn.SmoothL1Loss()
         self.loss_history = []
         self.total_actions = 0
         self.action_counts = {'0': 0,
@@ -90,15 +92,15 @@ class DQNLunarLanderAgent:
         for memory in experience_sample:
             states.append(memory.state)
             actions.append(memory.action)
-            rewards.append(memory.reward)
+            rewards.append([memory.reward])
             next_states.append(memory.next_state)
-            dones.append(memory.done)
+            dones.append([memory.done])
 
         return (torch.tensor(states, dtype=torch.float32),
                 torch.tensor(actions, dtype=torch.long),
                 torch.tensor(rewards, dtype=torch.float32),
                 torch.tensor(next_states, dtype=torch.float32),
-                torch.tensor(dones, dtype=torch.float32))
+                torch.tensor(dones, dtype=torch.int8))
 
     def push_memory(self, memory):
         """Push a transition memory object onto the experience deque"""
@@ -108,17 +110,20 @@ class DQNLunarLanderAgent:
     def do_training_update(self):
         if self.batch_size == 0 or len(self.experience_memory) < self.batch_size:
             return
-        self.optimizer.zero_grad()
         # Sample experience
         states, actions, rewards, next_states, dones = self.sample_random_experience(n=self.batch_size)
         # Get q values for the current state
         current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         next_q = self.target_network(next_states).detach()
-        max_next_q = torch.max(next_q).item()
+        max_next_q = next_q.max(1)[0].unsqueeze(1)
+        assert (rewards.size() == max_next_q.size())
+        assert (dones.size() == max_next_q.size())
         target_q = rewards + (1 - dones) * self.gamma * max_next_q
         target_q = target_q.detach()
+        target_q = target_q.squeeze()
         assert (current_q.size() == target_q.size())
         loss = self.criterion(current_q, target_q)
+        self.optimizer.zero_grad()
         self.loss_history.append(loss.item())
         loss.backward()
         self.optimizer.step()

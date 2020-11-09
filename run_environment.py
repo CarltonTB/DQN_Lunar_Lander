@@ -52,13 +52,16 @@ def train_lunar_lander(agent, episodes):
             print(f'epsilon: {agent.epsilon}')
             print(f"avg. score last 100: {mean_last_hundred}")
             print("\n")
+        if mean_last_hundred > 200.0:
+            print("SOLVED!")
+            break
     env.close()
     print(f'Time elapsed: {time.time() - start} seconds')
     agent.save_model()
     plot_score(score_history)
 
 
-def test_lunar_lander(agent, episodes, load_from_checkpoint=False):
+def test_lunar_lander(agent, episodes, load_from_checkpoint=False, render=False):
     if load_from_checkpoint:
         checkpoint = torch.load('./checkpoint/ckpt.pth')  # load checkpoint
         agent.q_network.load_state_dict(checkpoint['net'])
@@ -73,7 +76,8 @@ def test_lunar_lander(agent, episodes, load_from_checkpoint=False):
         score = 0
         state = env.reset()
         for t in range(1000):
-            env.render()
+            if render:
+                env.render()
             action = agent.select_action(state)
             state, reward, done, info = env.step(action)
             score += reward
@@ -103,8 +107,8 @@ def plot_score(score):
 
 
 if __name__ == "__main__":
-    ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
+    ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.01, decay_rate=0.999,
                                    learning_rate=0.0001, gamma=0.99, batch_size=64,
-                                   tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=1000000)
-    # train_lunar_lander(ll_agent, episodes=1000)
-    test_lunar_lander(ll_agent, 100, load_from_checkpoint=True)
+                                   tau=0.01, q_network=DQN(), target_network=DQN(), max_memory_length=500000)
+    train_lunar_lander(ll_agent, episodes=2000)
+    # test_lunar_lander(ll_agent, 100, load_from_checkpoint=True, render=False)
