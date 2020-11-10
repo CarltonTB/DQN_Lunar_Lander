@@ -107,5 +107,5 @@ if __name__ == "__main__":
     ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
                                    learning_rate=0.0001, gamma=0.99, batch_size=64,
                                    tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=500000)
-    # train_lunar_lander(ll_agent, episodes=1000)
+    train_lunar_lander(ll_agent, episodes=1000)
     test_lunar_lander(ll_agent, 100, load_from_checkpoint=True, render=True)
