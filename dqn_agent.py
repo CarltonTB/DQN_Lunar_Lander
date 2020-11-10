@@ -127,6 +127,7 @@ class DQNLunarLanderAgent:
         self.loss_history.append(loss.item())
         loss.backward()
         self.optimizer.step()
+        self.update_target_network()
 
     def update_target_network(self):
         # Update the target network
@@ -146,9 +147,12 @@ class TransitionMemory:
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(8, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 4)
+        # self.fc1 = nn.Linear(8, 128)
+        # self.fc2 = nn.Linear(128, 128)
+        # self.fc3 = nn.Linear(128, 4)
+        self.fc1 = nn.Linear(8, 32)
+        self.fc2 = nn.Linear(32, 64)
+        self.fc3 = nn.Linear(64, 4)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
