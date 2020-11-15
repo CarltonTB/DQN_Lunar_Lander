@@ -25,7 +25,8 @@ class DQNLunarLanderAgent:
         # gamma is the discount factor
         self.gamma = gamma
         # tau is the weighting of the target network parameters when updating them with the
-        # regular q network parameters
+        # regular q network parameters. Tau = 1.0 is no longer double DQN, since it just copies
+        # everything as is from the regular q network to the target network.
         self.tau = tau
         self.batch_size = batch_size
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
@@ -34,6 +35,7 @@ class DQNLunarLanderAgent:
         self.criterion = nn.SmoothL1Loss()
         self.loss_history = []
         self.total_actions = 0
+        self.total_training_episodes = 0
         self.action_counts = {'0': 0,
                               '1': 0,
                               '2': 0,
@@ -51,15 +53,27 @@ class DQNLunarLanderAgent:
         for key in self.action_distribution.keys():
             self.action_distribution[key] = self.action_counts[key]/self.total_actions
 
-    def save_model(self):
+    def save_model(self, filename):
         print("Saving Q network...")
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
+        if not os.path.isdir('checkpoints'):
+            os.mkdir('checkpoints')
         network_state = {
             'net': self.q_network.state_dict(),
+            'target': self.target_network.state_dict(),
+            'epsilon': self.epsilon,
+            'total_training_episodes': self.total_training_episodes
         }
-        torch.save(network_state, './checkpoint/ckpt.pth')
+        torch.save(network_state, f'./checkpoints/{filename}.pth')
         print("Save complete!")
+
+    def load_model(self, filename):
+        print("Loading model from checkpoint...")
+        checkpoint = torch.load(f'./checkpoints/{filename}.pth')  # load checkpoint
+        self.q_network.load_state_dict(checkpoint['net'])
+        self.target_network.load_state_dict(checkpoint['target'])
+        self.epsilon = checkpoint['epsilon']
+        self.total_training_episodes = checkpoint['total_training_episodes']
+        print("Load complete!")
 
     def select_action(self, state):
         """
