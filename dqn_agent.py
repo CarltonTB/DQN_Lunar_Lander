@@ -144,7 +144,6 @@ class DQNLunarLanderAgent:
         self.update_target_network()
 
     def update_target_network(self):
-        # Update the target network
         for source_parameters, target_parameters in zip(self.q_network.parameters(), self.target_network.parameters()):
             target_parameters.data.copy_(self.tau * source_parameters.data + (1.0 - self.tau) * target_parameters.data)
 
