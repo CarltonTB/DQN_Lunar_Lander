@@ -158,30 +158,36 @@ class TransitionMemory:
 
 
 class DQN(nn.Module):
-    def __init__(self):
+    def __init__(self, arch="BASELINE"):
         super(DQN, self).__init__()
-        # Wider
-        # self.fc1 = nn.Linear(8, 64)
-        # self.fc2 = nn.Linear(64, 128)
-        # self.fc3 = nn.Linear(128, 4)
-        # Baseline
-        self.fc1 = nn.Linear(8, 32)
-        self.fc2 = nn.Linear(32, 64)
-        self.fc3 = nn.Linear(64, 4)
-        # Deeper
-        # self.fc1 = nn.Linear(8, 32)
-        # self.fc2 = nn.Linear(32, 64)
-        # self.fc3 = nn.Linear(64, 128)
-        # self.fc4 = nn.Linear(128, 4)
+        self.arch = arch
+        if self.arch == "WIDE":
+            # Wider
+            self.fc1 = nn.Linear(8, 64)
+            self.fc2 = nn.Linear(64, 128)
+            self.fc3 = nn.Linear(128, 4)
+        elif self.arch == "DEEP":
+            # Deeper
+            self.fc1 = nn.Linear(8, 32)
+            self.fc2 = nn.Linear(32, 64)
+            self.fc3 = nn.Linear(64, 128)
+            self.fc4 = nn.Linear(128, 4)
+        else:
+            # Baseline
+            self.fc1 = nn.Linear(8, 32)
+            self.fc2 = nn.Linear(32, 64)
+            self.fc3 = nn.Linear(64, 4)
 
     def forward(self, x):
-        # baseline
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        # deeper
-        # x = F.relu(self.fc1(x))
-        # x = F.relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        # x = self.fc4(x)
+        if self.arch == "DEEP":
+            # deeper
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = F.relu(self.fc3(x))
+            x = self.fc4(x)
+        else:
+            # baseline
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = self.fc3(x)
         return x
