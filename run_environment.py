@@ -4,6 +4,7 @@ import gym
 import time
 from datetime import datetime
 from dqn_agent import *
+from random_agent import *
 import matplotlib.pyplot as plt
 
 
@@ -37,7 +38,6 @@ def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True
             if done:
                 # print(f'Episode {episode} ended in {t + 1} timesteps')
                 break
-        # agent.decay_epsilon()
         agent.total_training_episodes += 1
         env.reset()
         score_history.append(score)
@@ -56,14 +56,14 @@ def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True
             print(f"Avg. score last 100: {mean_last_hundred}")
             agent.save_model(save_filename)
             print("\n")
-        if mean_last_hundred > 200.0:
-            print("SOLVED!")
-            print(f'Total training episodes: {agent.total_training_episodes}')
-            agent.save_model(save_filename)
-            break
+        # if mean_last_hundred > 200.0:
+        #     print("SOLVED!")
+        #     print(f'Total training episodes: {agent.total_training_episodes}')
+        #     agent.save_model(save_filename)
+        #     break
     env.close()
     print(f'Time elapsed: {time.time() - start} seconds')
-    plot_score(score_history, rolling_means)
+    plot_score(score_history, rolling_means, f"training_plot_{save_filename}")
 
 
 def test_lunar_lander(agent, episodes, filename, load_from_checkpoint=False, render=False):
@@ -100,10 +100,10 @@ def test_lunar_lander(agent, episodes, filename, load_from_checkpoint=False, ren
         env.reset()
     env.close()
     print(f'Mean score last 100 episodes: {mean_last_hundred}')
-    plot_score(score_history, rolling_means)
+    plot_score(score_history, rolling_means, f"testing_plot_{filename}")
 
 
-def plot_score(score, rolling_mean):
+def plot_score(score, rolling_mean, filename):
     plt.figure(figsize=(10, 5))
     plt.title("Score vs. Episodes")
     plt.plot(score, label="Score")
@@ -112,16 +112,58 @@ def plot_score(score, rolling_mean):
     plt.xlabel("Episode")
     now = datetime.now()
     datetime_string = now.strftime("%d-%m-%Y_%H-%M-%S")
-    plt.savefig(f"./graphs/score_plot_{datetime_string}")
+    # plt.savefig(f"./graphs/{filename}")
     plt.show()
 
 
 if __name__ == "__main__":
-    # Things to test: Vary decay rate, vary learning rate, vary tau, vary architecture
+    # Things to test: Vary decay rate, vary architecture
     ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
                                    learning_rate=0.0001, gamma=0.99, batch_size=64,
                                    tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=500000)
-    train_lunar_lander(ll_agent, episodes=2000, save_filename="ddqn8-32-64-4-fast-decay2", load_from_checkpoint=False)
+    # train_lunar_lander(ll_agent, episodes=500, save_filename="ddqn8-32-64-4-half-trained", load_from_checkpoint=False)
     # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=False)
     # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-4-slower-decay", load_from_checkpoint=True, render=True)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-64-128-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-64-128-4-slower-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-64-128-4-fast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-64-128-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-64-128-4-fast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-64-128-4-slow-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-128-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-128-4-fast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-superfast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-fast-decay", load_from_checkpoint=True, render=False)
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-slow-decay", load_from_checkpoint=True, render=True)
+
+    # DEMO RUNS
+    # Random Agent
+    # test_lunar_lander(RandomAgent(), 100, filename="test_rand_agent", load_from_checkpoint=False, render=True)
+
+    # Half Trained
+    # 400 epsiodes of training, hasn't yet explored enough to know it should land on the pad, just knows to avoid crashing
+    test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-half-trained", load_from_checkpoint=True, render=True)
+
+    # Trained just enough to solve
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=True)
+
+    # Long training
+    # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-slow-decay-long-training", load_from_checkpoint=True, render=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
