@@ -30,8 +30,11 @@ def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True
             action = agent.select_action(state)
             next_state, reward, done, info = env.step(action)
             agent.push_memory(TransitionMemory(state, action, reward, next_state, done))
-            # Update the q network and target network parameters
+            # Update the q network parameters
             agent.do_training_update()
+            # Update target network parameters every 5 timesteps
+            if t % 5 == 0:
+                agent.update_target_network()
             score += reward
             state = next_state
             # Try decaying faster

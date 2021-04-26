@@ -141,7 +141,8 @@ class DQNLunarLanderAgent:
         self.loss_history.append(loss.item())
         loss.backward()
         self.optimizer.step()
-        self.update_target_network()
+
+    # TODO: Write a function to do a training update using prioritized experience memory
 
     def update_target_network(self):
         for source_parameters, target_parameters in zip(self.q_network.parameters(), self.target_network.parameters()):

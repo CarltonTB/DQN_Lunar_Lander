@@ -10,7 +10,7 @@ import torch
 class PrioritizedReplayMemory:
 
     def __init__(self, max_length, alpha, beta):
-        self.memory = deque(max_length = max_length)
+        self.memory = deque(max_length=max_length)
         self.max_length = max_length
         # hyper param used to determine how much TD error determines prioritization of a transition experience
         self.alpha = alpha
@@ -19,7 +19,7 @@ class PrioritizedReplayMemory:
         # stores the temporal difference errors for the corresponding transition experience at each index
         self.priorities = np.zeros(max_length, dtype=np.float32)
 
-    def push(self, transition_memory, priority):
+    def push(self, transition_memory):
         """
         :param transition_memory: TransitionMemory object from a single agent interaction with the environment
         :param priority: TD error of the provided transition_memory
@@ -27,7 +27,11 @@ class PrioritizedReplayMemory:
         """
         assert (isinstance(transition_memory, TransitionMemory))
         self.memory.append(transition_memory)
-        self.priorities.append(priority)
+        # Priority starts out as max priority and is updated in the training function
+        if len(self.memory > 0):
+            self.priorities.append(self.priorities.max())
+        else:
+            self.priorities.append(1.0)
 
     def sample(self, n):
         """
@@ -39,10 +43,31 @@ class PrioritizedReplayMemory:
             self.priorities = self.priorities[self.priorities.size-self.max_length:]
             assert(len(self.memory) == self.priorities.size)
 
-        selection_probabilities = self.priorities ** self.alpha
+        selection_probabilities = self.priorities**self.alpha
         selection_probabilities = selection_probabilities / selection_probabilities.sum()
 
-        select_indices = np.random.choice(len(self.memory), n, p=selection_probabilities)
-        sampled = [self.memory[i] for i in select_indices]
-        # TODO: compute the importance sampling weights and return everything as tensors
+        selected_indices = np.random.choice(len(self.memory), n, p=selection_probabilities)
+        sampled = [self.memory[i] for i in selected_indices]
+        total_experiences = len(self.memory)
+        importance_sampling_weights = ((1/total_experiences) * (1/selection_probabilities[selected_indices]))**self.beta
+        # Normalize the weights to range (0, 1) inclusive
+        importance_sampling_weights = importance_sampling_weights / np.max(importance_sampling_weights)
+
+        states, actions, rewards, next_states, dones = [], [], [], [], []
+        for transition_memory in sampled:
+            states.append(transition_memory.state)
+            actions.append(transition_memory.action)
+            rewards.append([transition_memory.reward])
+            next_states.append(transition_memory.next_state)
+            dones.append([transition_memory.done])
+
+        return (torch.tensor(states, dtype=torch.float32),
+                torch.tensor(actions, dtype=torch.long),
+                torch.tensor(rewards, dtype=torch.float32),
+                torch.tensor(next_states, dtype=torch.float32),
+                torch.tensor(dones, dtype=torch.int8),
+                torch.tensor(importance_sampling_weights, dtype=torch.float32),
+                selected_indices)
+
+
 
