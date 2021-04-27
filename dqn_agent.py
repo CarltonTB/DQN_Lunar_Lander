@@ -7,12 +7,15 @@ import torch.nn.functional as F
 import torch
 import numpy as np
 import os
+from prioritized_replay_memory import PrioritizedReplayMemory
+from transition_memory import TransitionMemory
 
 
 class DQNLunarLanderAgent:
     def __init__(self, epsilon, min_epsilon, decay_rate, learning_rate, tau, gamma, batch_size,
                  q_network, target_network, max_memory_length):
         self.experience_memory = deque(maxlen=max_memory_length)
+        self.prioritized_memory = PrioritizedReplayMemory(max_length=max_memory_length, alpha=0.6, beta=0.4)
         self.q_network = q_network
         self.target_network = target_network
         # epsilon is the probability of taking a random action
@@ -30,9 +33,9 @@ class DQNLunarLanderAgent:
         self.tau = tau
         self.batch_size = batch_size
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
-        # self.criterion = nn.MSELoss()
+        self.criterion = nn.MSELoss()
         # Huber loss reduces sensitivity to outliers
-        self.criterion = nn.SmoothL1Loss()
+        # self.criterion = nn.SmoothL1Loss()
         self.loss_history = []
         self.total_actions = 0
         self.total_training_episodes = 0
@@ -142,20 +145,37 @@ class DQNLunarLanderAgent:
         loss.backward()
         self.optimizer.step()
 
-    # TODO: Write a function to do a training update using prioritized experience memory
+    def do_prioritized_training_update(self):
+        if self.batch_size == 0 or len(self.prioritized_memory.memory) < self.batch_size:
+            return
+        # Sample prioritized experience
+        states, actions, rewards, next_states, dones, importance_sampling_weights, selected_indices = self.prioritized_memory.sample(self.batch_size)
+        # Get q values for the current state
+        current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        next_q = self.target_network(next_states).detach()
+        max_next_q = next_q.max(1)[0].unsqueeze(1)
+        assert (rewards.size() == max_next_q.size())
+        assert (dones.size() == max_next_q.size())
+        target_q = rewards + (1 - dones) * self.gamma * max_next_q
+        target_q = target_q.detach()
+        target_q = target_q.squeeze()
+        assert (current_q.size() == target_q.size())
+        loss = (current_q - target_q).pow(2)
+        assert (loss.size() == importance_sampling_weights.size())
+        # Multiply the TD errors by the importance sampling weights
+        loss = loss * importance_sampling_weights
+        new_priorities = loss + 0.00001
+        loss = torch.mean(loss)
+        self.optimizer.zero_grad()
+        self.loss_history.append(loss.item())
+        loss.backward()
+        self.optimizer.step()
+        # Update priorities for the indices selected in the batch
+        self.prioritized_memory.update_priorities(selected_indices, new_priorities.detach().numpy())
 
     def update_target_network(self):
         for source_parameters, target_parameters in zip(self.q_network.parameters(), self.target_network.parameters()):
             target_parameters.data.copy_(self.tau * source_parameters.data + (1.0 - self.tau) * target_parameters.data)
-
-
-class TransitionMemory:
-    def __init__(self, state, action, reward, next_state, done):
-        self.state = state
-        self.action = action
-        self.reward = reward
-        self.next_state = next_state
-        self.done = done
 
 
 class DQN(nn.Module):

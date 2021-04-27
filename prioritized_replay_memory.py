@@ -1,52 +1,73 @@
 # Naive Implementation of prioritized experience replay
 # Could be implemented more efficiently with a SumTree data structure
 
+from transition_memory import TransitionMemory
 from collections import deque
-import numpy as np
-from dqn_agent import TransitionMemory
 import torch
+import numpy as np
 
 
 class PrioritizedReplayMemory:
-
-    def __init__(self, max_length, alpha, beta):
-        self.memory = deque(max_length=max_length)
+    def __init__(self, max_length=500000, alpha=0.6, beta=0.4):
+        self.memory = deque(maxlen=max_length)
         self.max_length = max_length
         # hyper param used to determine how much TD error determines prioritization of a transition experience
         self.alpha = alpha
         # hyper param for importance sampling that is decayed over time throughout training
         self.beta = beta
+        self.min_beta = beta
+        self.max_beta = 1.0
+        # number of times to anneal beta toward 1.0
+        self.beta_annealing_steps = 500000
         # stores the temporal difference errors for the corresponding transition experience at each index
-        self.priorities = np.zeros(max_length, dtype=np.float32)
+        self.priorities = np.array([], dtype=np.float32)
+        # self.priorities = np.zeros(max_length, dtype=np.float32)
 
     def push(self, transition_memory):
         """
         :param transition_memory: TransitionMemory object from a single agent interaction with the environment
-        :param priority: TD error of the provided transition_memory
         :return: None
         """
         assert (isinstance(transition_memory, TransitionMemory))
         self.memory.append(transition_memory)
         # Priority starts out as max priority and is updated in the training function
-        if len(self.memory > 0):
-            self.priorities.append(self.priorities.max())
+        if len(self.memory) > 0:
+            max_priority = self.priorities.max() if self.priorities.size > 0 else 1.0
+            self.priorities = np.append(self.priorities, [max_priority])
         else:
-            self.priorities.append(1.0)
+            self.priorities = np.append(self.priorities, [1.0])
+
+    def update_priorities(self, selected_indices, new_priorities):
+        """
+        :param selected_indices: Indices of experiences and priorities that were selected for a batch update
+        :param new_priorities: New values of the priorities for those selected indices
+        :return:
+        """
+        j = 0
+        for i in selected_indices:
+            self.priorities[i] = new_priorities[j]
+            j += 1
+
+    def anneal_beta(self, frame):
+        if frame > self.beta_annealing_steps:
+            self.beta = self.max_beta
+        else:
+            self.beta = self.min_beta + (frame / self.beta_annealing_steps) * (self.max_beta - self.min_beta)
 
     def sample(self, n):
         """
         :param n: number of
         :return: tuple of tensors containing states, actions, rewards, next states, and dones
         """
-        if self.max_length < self.priorities.size:
-            # Truncate the priorities array so it matches the size of the memory array
+        if len(self.memory) < self.priorities.size:
+            # Truncate the priorities array so it matches the size of the memory array at max capacity
             self.priorities = self.priorities[self.priorities.size-self.max_length:]
             assert(len(self.memory) == self.priorities.size)
 
         selection_probabilities = self.priorities**self.alpha
         selection_probabilities = selection_probabilities / selection_probabilities.sum()
 
-        selected_indices = np.random.choice(len(self.memory), n, p=selection_probabilities)
+        selected_indices = np.random.choice(len(self.memory), size=n, replace=False, p=selection_probabilities)
         sampled = [self.memory[i] for i in selected_indices]
         total_experiences = len(self.memory)
         importance_sampling_weights = ((1/total_experiences) * (1/selection_probabilities[selected_indices]))**self.beta
