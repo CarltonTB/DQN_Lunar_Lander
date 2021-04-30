@@ -8,7 +8,7 @@ import numpy as np
 
 
 class PrioritizedReplayMemory:
-    def __init__(self, max_length=500000, alpha=0.6, beta=0.4):
+    def __init__(self, max_length=100000, alpha=0.6, beta=0.4, beta_annealing_steps=1000000):
         self.memory = deque(maxlen=max_length)
         self.max_length = max_length
         # hyper param used to determine how much TD error determines prioritization of a transition experience
@@ -18,7 +18,7 @@ class PrioritizedReplayMemory:
         self.min_beta = beta
         self.max_beta = 1.0
         # number of times to anneal beta toward 1.0
-        self.beta_annealing_steps = 500000
+        self.beta_annealing_steps = beta_annealing_steps
         # stores the temporal difference errors for the corresponding transition experience at each index
         self.priorities = np.array([], dtype=np.float32)
         # self.priorities = np.zeros(max_length, dtype=np.float32)
@@ -91,4 +91,8 @@ class PrioritizedReplayMemory:
                 selected_indices)
 
 
-
+if __name__ == "__main__":
+    test = PrioritizedReplayMemory()
+    for i in range(test.beta_annealing_steps):
+        print(test.beta)
+        test.anneal_beta(i)

@@ -145,7 +145,7 @@ class DQNLunarLanderAgent:
         loss.backward()
         self.optimizer.step()
 
-    def do_prioritized_training_update(self):
+    def do_prioritized_training_update(self, frame):
         if self.batch_size == 0 or len(self.prioritized_memory.memory) < self.batch_size:
             return
         # Sample prioritized experience
@@ -172,6 +172,7 @@ class DQNLunarLanderAgent:
         self.optimizer.step()
         # Update priorities for the indices selected in the batch
         self.prioritized_memory.update_priorities(selected_indices, new_priorities.detach().numpy())
+        self.prioritized_memory.anneal_beta(frame)
 
     def update_target_network(self):
         for source_parameters, target_parameters in zip(self.q_network.parameters(), self.target_network.parameters()):

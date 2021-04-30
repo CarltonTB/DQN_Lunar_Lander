@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import sys
 
 
-def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True):
+def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True, prioritized=False):
     """Run the lunar lander v2 environment"""
     if load_from_checkpoint:
         agent.load_model(save_filename)
@@ -30,21 +30,18 @@ def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True
             action = agent.select_action(state)
             next_state, reward, done, info = env.step(action)
 
-            # Uniform update
-            # agent.push_memory(TransitionMemory(state, action, reward, next_state, done))
-            # agent.do_training_update()
+            if prioritized:
+                # Prioritized experience replay update
+                agent.prioritized_memory.push(TransitionMemory(state, action, reward, next_state, done))
+                agent.do_prioritized_training_update((episode * 1000) + t)
+            else:
+                # Uniform experience replay update
+                agent.push_memory(TransitionMemory(state, action, reward, next_state, done))
+                agent.do_training_update()
 
-            # Prioritized update
-            agent.prioritized_memory.push(TransitionMemory(state, action, reward, next_state, done))
-            agent.do_prioritized_training_update()
-            agent.prioritized_memory.anneal_beta((episode*1000)+t)
-
-            # Update target network parameters every 5 timesteps
-            if t % 5 == 0:
-                agent.update_target_network()
+            agent.update_target_network()
             score += reward
             state = next_state
-            # Try decaying faster
             agent.decay_epsilon()
             if done:
                 # print(f'Episode {episode} ended in {t + 1} timesteps')
@@ -61,10 +58,13 @@ def train_lunar_lander(agent, episodes, save_filename, load_from_checkpoint=True
         if episode % 100 == 0:
             agent.update_action_distribution()
             print(f'Training episode {episode} complete!')
+            print(f'Prioritized experience replay: {prioritized}')
             print("Action Distribution:")
             print(agent.action_distribution)
+            if prioritized:
+                print(f'Beta: {agent.prioritized_memory.beta}')
             print(f'Epsilon: {agent.epsilon}')
-            print(f"Avg. score last 100: {mean_last_hundred}")
+            print(f"Avg. score last 100 episodes: {mean_last_hundred}")
             agent.save_model(save_filename)
             print("\n")
         # if mean_last_hundred > 200.0:
@@ -128,19 +128,25 @@ def plot_score(score, rolling_mean, filename):
 
 
 if __name__ == "__main__":
-    # ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
-    #                                learning_rate=0.0001, gamma=0.99, batch_size=64,
-    #                                tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=500000)
-    # ll_agent_wide = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
-    #                                     learning_rate=0.0001, gamma=0.99, batch_size=64,
-    #                                     tau=0.001, q_network=DQN(arch="WIDE"), target_network=DQN(arch="WIDE"),
-    #                                     max_memory_length=500000)
-
-    prioritized_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
+    ll_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
                                    learning_rate=0.0001, gamma=0.99, batch_size=64,
-                                   tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=100000)
-    train_lunar_lander(prioritized_agent, episodes=1000, save_filename="prioritized_dqn_baseline", load_from_checkpoint=False)
+                                   tau=0.001, q_network=DQN(), target_network=DQN(), max_memory_length=500000)
+    ll_agent_wide = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.995,
+                                        learning_rate=0.0001, gamma=0.99, batch_size=64,
+                                        tau=0.001, q_network=DQN(arch="WIDE"), target_network=DQN(arch="WIDE"),
+                                        max_memory_length=500000)
+    prioritized_agent = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.999,
+                                   learning_rate=0.0001, gamma=0.99, batch_size=64,
+                                   tau=0.001, q_network=DQN(arch="WIDE"), target_network=DQN(arch="WIDE"), max_memory_length=100000)
+    # train_lunar_lander(prioritized_agent, episodes=1000, save_filename="prioritized_dqn_baseline", load_from_checkpoint=False, prioritized=True)
+    # test_lunar_lander(prioritized_agent, 100, filename="prioritized_dqn_baseline", load_from_checkpoint=True, render=False)
+    uniform_agent_baseline = DQNLunarLanderAgent(epsilon=1.0, min_epsilon=0.1, decay_rate=0.999,
+                                   learning_rate=0.0001, gamma=0.99, batch_size=64,
+                                   tau=0.001, q_network=DQN(arch="WIDE"), target_network=DQN(arch="WIDE"), max_memory_length=100000)
+    # train_lunar_lander(uniform_agent_baseline, episodes=1000, save_filename="uniform_dqn_baseline", load_from_checkpoint=False)
+    # test_lunar_lander(uniform_agent_baseline, 100, filename="uniform_dqn_baseline", load_from_checkpoint=True, render=False)
 
+    # EXPERIMENTS
     # train_lunar_lander(ll_agent, episodes=500, save_filename="ddqn8-32-64-4-half-trained", load_from_checkpoint=False)
     # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=False)
     # test_lunar_lander(ll_agent, 100, filename="dqn8-32-64-4-slower-decay", load_from_checkpoint=True, render=True)
@@ -159,28 +165,36 @@ if __name__ == "__main__":
     # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-fast-decay", load_from_checkpoint=True, render=False)
     # test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-128-4-slow-decay", load_from_checkpoint=True, render=True)
 
-    # demo_choice = input("Enter number corresponding to desired demo:\n"
-    #                     "1. Random Agent\n"
-    #                     "2. Partially-Trained\n"
-    #                     "3. Trained enough to solve\n"
-    #                     "4. 3000 Episodes of training\n")
-    # demo_choice = int(demo_choice)
-    # # DEMO RUNS
-    # if demo_choice == 1:
-    #     # Random Agent
-    #     test_lunar_lander(RandomAgent(), 100, filename="test_rand_agent", load_from_checkpoint=False, render=True)
-    # elif demo_choice == 2:
-    #     # Half Trained
-    #     # 400 epsiodes of training, hasn't yet explored enough to know it should land on the pad, just knows to avoid crashing
-    #     test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-half-trained", load_from_checkpoint=True, render=True)
-    # elif demo_choice == 3:
-    #     # Trained just enough to solve
-    #     test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=True)
-    # elif demo_choice == 4:
-    #     # Long training (3000 episodes)
-    #     test_lunar_lander(ll_agent_wide, 100, filename="ddqn8-32-64-128-4-slow-decay-long-training", load_from_checkpoint=True, render=True)
-    # else:
-    #     print("Invalid choice")
+    demo_choice = input("Enter number corresponding to desired demo:\n"
+                        "1. Random Agent\n"
+                        "2. Partially-Trained\n"
+                        "3. Trained enough to solve\n"
+                        "4. 3000 Episodes of training\n"
+                        "5. Prioritized ER 1000 episodes of training\n"
+                        "6. Uniform ER baseline 1000 episodes of training\n")
+    demo_choice = int(demo_choice)
+    # DEMO RUNS
+    if demo_choice == 1:
+        # Random Agent
+        test_lunar_lander(RandomAgent(), 100, filename="test_rand_agent", load_from_checkpoint=False, render=True)
+    elif demo_choice == 2:
+        # Half Trained
+        # 400 epsiodes of training, hasn't yet explored enough to know it should land on the pad, just knows to avoid crashing
+        test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-half-trained", load_from_checkpoint=True, render=True)
+    elif demo_choice == 3:
+        # Trained just enough to solve
+        test_lunar_lander(ll_agent, 100, filename="ddqn8-32-64-4-fast-decay", load_from_checkpoint=True, render=True)
+    elif demo_choice == 4:
+        # Long training (3000 episodes)
+        test_lunar_lander(ll_agent_wide, 100, filename="ddqn8-32-64-128-4-slow-decay-long-training", load_from_checkpoint=True, render=True)
+    elif demo_choice == 5:
+        test_lunar_lander(prioritized_agent, 100, filename="prioritized_dqn_baseline", load_from_checkpoint=True,
+                          render=True)
+    elif demo_choice == 6:
+        test_lunar_lander(uniform_agent_baseline, 100, filename="uniform_dqn_baseline", load_from_checkpoint=True,
+                          render=True)
+    else:
+        print("Invalid choice")
 
 
 
